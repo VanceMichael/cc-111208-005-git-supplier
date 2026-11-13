@@ -16,7 +16,25 @@ python -m unittest discover -s tests -v
 python -m scripts.demo
 ```
 
-检查命令输出单份来源的结构摘要。`capture URL --method GET --state var` 仅接受 loopback HTTP，保存原始响应为 SHA256 文件，并在 SQLite captures 表登记；可用 `--header 'Name:Value'` 传头、`--body FILE` 传正文，不跟随重定向。检查器不执行多页、业务去重或正式接收。当前命令不包含待开发的 acquire 业务流程；新增能力与现有摘要工具的边界见 docs/acceptance.md。
+检查命令输出单份来源的结构摘要。`capture URL --method GET --state var` 仅接受 loopback HTTP，保存原始响应为 SHA256 文件，并在 SQLite captures 表登记；可用 `--header 'Name:Value'` 传头、`--body FILE` 传正文，不跟随重定向。检查器不执行多页、业务去重或正式接收。
+
+## 业务接收 acquire
+
+`acquire` 在保留 trees/capture 的同时，实现固定到真实 commit 的商品与网点接收，数据源是已登记的授权本地仓库，不使用文件修改时间或远程传输：
+
+```sh
+python -m supplytree acquire --state .tmp/acq add-source supplier .tmp/supplier \
+    --branch catalog --product-root products --outlet-root outlets
+python -m supplytree acquire --state .tmp/acq observe supplier
+python -m supplytree acquire --state .tmp/acq adopt supplier
+# 回退或分叉产生独立代际时，必须先显式确认
+python -m supplytree acquire --state .tmp/acq confirm-generation supplier --observation 3
+python -m supplytree acquire --state .tmp/acq current supplier
+python -m supplytree acquire --state .tmp/acq history supplier --kind product --id P1
+python -m supplytree acquire --state .tmp/acq provenance supplier --blob <git-sha>
+```
+
+每次 observe 立即把分支固定为一个 commit SHA 并按祖先关系分类（快进、多提交跳跃、回退、分叉、消失/重现）；非后代提交是独立观察代际，未经 `confirm-generation` 不得替换当前视图。一次 adopt 在单个 SQLite 事务内切换商品、网点引用、原文 blob 与观察水位，解析失败或进程终止都停在上一个完整 commit。仅接收普通 blob，符号链接与 gitlink 记录排除原因；路径以 NUL 分隔读取，ref 与路径不进入 shell。新增能力与现有摘要工具的边界见 docs/acceptance.md。
 
 ## 可复现容器
 
